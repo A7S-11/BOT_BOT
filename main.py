@@ -24,9 +24,9 @@ userbot = Client("user", config.API_ID, config.API_HASH)
 async def main():
     db, cur = get_db()
 
-    # تسجيل الهاندلرز
-    chat_register(bot, cur)
-    admin_register(bot, cur, db, config.ADMIN_ID)
+    # ✅ التصحيح هنا
+    chat_register(bot, db, cur)
+    admin_register(bot, db, cur)
 
     # تشغيل
     await bot.start()
@@ -35,16 +35,16 @@ async def main():
     log.info("🤖 Bot Started")
 
     # تشغيل المهام
-    async def safe_task(coro, name):
+    async def safe_task(coro_func, name):
         while True:
             try:
-                await coro
+                await coro_func()
             except Exception as e:
                 log.error(f"❌ Error in {name}: {e}")
                 await asyncio.sleep(5)
 
-    asyncio.create_task(safe_task(publisher(userbot, cur), "publisher"))
-    asyncio.create_task(safe_task(retarget(bot, cur), "retarget"))
+    asyncio.create_task(safe_task(lambda: publisher(userbot, cur), "publisher"))
+    asyncio.create_task(safe_task(lambda: retarget(bot, cur), "retarget"))
 
     await asyncio.Event().wait()
 
