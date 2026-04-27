@@ -1,66 +1,71 @@
+import os
+import shutil
 import asyncio
 import logging
 from pyrogram import Client
+
+# استيراد الإعدادات وقاعدة البيانات
+import config
 from database.db import get_db
+
+# استيراد الهاندلرز
+from handlers.admin import register as admin_register
+from handlers.chat import register as chat_register
+
+# استيراد المهام الخلفية
 from core.publisher import publisher
 from core.retargeting import retarget
-from handlers.chat import register as chat_register
-from handlers.admin import register as admin_register
-import config
 
-# ───── Logging ─────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# إعداد السجلات (Logs)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
 
-# ───── Clients ─────
-# ملاحظة: إذا كنت تستخدم String Session للـ Userbot ضيفها هنا
-bot = Client(
-    "bot_session", 
-    api_id=config.API_ID, 
-    api_hash=config.API_HASH, 
-    bot_token=config.BOT_TOKEN
-)
+# ───── إعدادات المسارات (Railway Volume) ─────
+DATA_DIR = "/data"
+SESSION_NAME = "user"
+SESSION_FILE = f"{SESSION_NAME}.session"
 
-userbot = Client(
-    "user_session", 
-    api_id=config.API_ID, 
-    api_hash=config.API_HASH
-)
-
-# ───── Main ─────
 async def main():
-    # استدعاء قاعدة البيانات
-    db, cur = get_db()
+    log.info("🚀 Starting Bot...")
 
-    # تسجيل الهاندلرز
-    chat_register(bot, cur)
-    admin_register(bot, db, cur, config.ADMIN_ID)
+    # 1. إدارة ملف السشن (نقل الملف من GitHub إلى المجلد المحمي)
+    if os.path.exists(SESSION_FILE) and not os.path.exists(f"{DATA_DIR}/{SESSION_FILE}"):
+        try:
+            shutil.copy(SESSION_FILE, f"{DATA_DIR}/{SESSION_FILE}")
+            log.info(f"✅ Moved {SESSION_FILE} to {DATA_DIR}")
+        except Exception as e:
+            log.error(f"❌ Failed to move session: {e}")
 
-    # تشغيل الكلاينت
-    log.info("🚀 Starting Clients...")
-    await bot.start()
-    await userbot.start()
+    # 2. الاتصال بقاعدة البيانات
+    try:
+        db, cur = get_db()
+        log.info("✅ Database connected.")
+    except Exception as e:
+        log.error(f"🔥 Database error: {e}")
+        return
 
-    log.info("🤖 Bot and Userbot are online!")
+    # 3. تعريف عميل Pyrogram مع مسار السشن بداخل الفوليوم
+    # ملاحظة: نستخدم المسار بداخل DATA_DIR لضمان الاستمرارية
+    app = Client(
+        name=f"{DATA_DIR}/{SESSION_NAME}",
+        api_id=config.API_ID,
+        api_hash=config.API_HASH
+    )
 
-    # دالة المهام الآمنة (تعديل بسيط لضمان تمرير الـ arguments بشكل صحيح)
-    async def safe_task(coro_func, name, *args):
-        while True:
-            try:
-                log.info(f"⏳ Starting task: {name}")
-                await coro_func(*args)
-            except Exception as e:
-                log.error(f"❌ Error in {name}: {e}")
-                await asyncio.sleep(10) # انتظار قليل قبل إعادة المحاولة
+    # 4. تسجيل الهاندلرز (الأدمن والدردشة)
+    admin_register(app, db, cur, config.ADMIN_ID)
+    chat_register(app, db, cur)
 
-    # تشغيل المهام الخلفية
-    asyncio.create_task(safe_task(publisher, "publisher", userbot, cur))
-    asyncio.create_task(safe_task(retarget, "retarget", bot, cur))
+    # 5. بدء تشغيل البوت
+    await app.start()
+    log.info("💎 Bot is online and connected!")
 
-    # الحفاظ على البوت يعمل للأبد
+    # 6. تشغيل المهام الخلفية (Background Tasks)
+    # تشغيل الناشر وإعادة الاستهداف كمهام غير متزامنة
+    asyncio.create_task(publisher(app, cur))
+    asyncio.create_task(retarget(app, cur))
+
+    # 7. الحفاظ على البوت قيد التشغيل (Idle)
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
@@ -68,3 +73,5 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         log.info("👋 Bot stopped by user.")
+    except Exception as e:
+        log.error(f"🔥 Critical error: {e}")
