@@ -1,8 +1,11 @@
 import os
-API_ID = int(os.getenv("API_ID"))
-ABI_HASH = os.getenv("ABI_HASH")
+
+API_ID = int(os.getenv("API_ID", 0))
+API_HASH = os.getenv("API_HASH")  # ✅ صححنا الاسم
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-OPENAI_API = os.getenv("OPENAI_API")
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # ✅ صححنا الاسم
 
 DELAY_MIN = 60
 DELAY_MAX = 120
