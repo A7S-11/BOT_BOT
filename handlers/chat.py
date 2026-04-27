@@ -1,6 +1,8 @@
 import google.generativeai as genai
 from pyrogram import Client, filters
 import os
+import asyncio
+import random
 import logging
 
 log = logging.getLogger(__name__)
@@ -16,24 +18,36 @@ def register(app, db, cur):
         user_id = m.from_user.id
         text = m.text
         
-        log.info(f"📩 وصلت رسالة من: {user_id} - النص: {text}")
+        log.info(f"📩 وصلت رسالة من: {user_id}")
 
         try:
-            # إرسال حالة "جاري الكتابة" حتى يبين طبيعي
+            # --- ميزة التفكير والانتظار الذكي ---
+            # أولاً: يبين إنه "جاري الكتابة" لفترة عشوائية حسب طول الرسالة
             await client.send_chat_action(m.chat.id, "typing")
+            wait_time = random.uniform(2, 5) # ينتظر بين 2 إلى 5 ثواني كأنه جاي يقرأ
+            await asyncio.sleep(wait_time)
 
-            # تعليمات الذكاء الاصطناعي
-            prompt = f"أنت شخص عراقي اسمك علوش، رد بلهجة عراقية شعبية ممتعة على هذا الكلام: {text}"
+            # --- توجيه الذكاء الاصطناعي (Prompt) ---
+            prompt = f"""
+            أنت 'علوش' مبرمج وبوت ديفيلوبر عراقي، ذكي وشخصيتك قوية.
+            رد بلهجة عراقية شعبية (مو رسمية)، خلي الرد يبين كأنك شخص حقيقي جاي يدردش.
+            ممنوع تستخدم كلمات مثل "أهلاً بك" أو "كيف يمكنني مساعدتك".
+            إذا سألك عن برمجة أو بوتات، جاوبه كخبير.
+            إذا سألك سؤال عادي، رد بذكاء ومزاح عراقي.
+            
+            الكلام اللي وصلك: {text}
+            """
             
             response = model.generate_content(prompt)
             
             if response.text:
+                # يرجع يسوي typing قبل الإرسال الفعلي
+                await client.send_chat_action(m.chat.id, "typing")
+                await asyncio.sleep(1)
                 await m.reply(response.text)
-                log.info(f"✅ تم الرد على {user_id}")
+                log.info(f"✅ تم الرد بذكاء على {user_id}")
             else:
-                await m.reply("هلا بيك عيوني..")
+                await m.reply("ها عيوني، كول شمحتاج؟")
                 
         except Exception as e:
             log.error(f"❌ خطأ في الرد الذكي: {e}")
-            # رد احتياطي في حال فشل الـ AI
-            await m.reply("هلا بيك غالي، ثواني وأرد عليك.")
