@@ -3,7 +3,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 
 pending = {}
 
-# القائمة الرئيسية المحدثة
+# القائمة الرئيسية
 def main_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📢 إدارة النشر", callback_data="p_menu"),
@@ -14,11 +14,12 @@ def main_menu():
         [InlineKeyboardButton("🧹 تصفير البيانات", callback_data="reset_all")]
     ])
 
-# قائمة إعدادات AI
-def ai_menu(current_status="مفعل ✅"):
+# قائمة إدارة النشر
+def publish_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"الحالة: {current_status}", callback_data="toggle_ai")],
-        [InlineKeyboardButton("📝 تعديل البرومبت (الشخصية)", callback_data="edit_prompt")],
+        [InlineKeyboardButton("➕ إضافة قناة", callback_data="add_c"),
+         InlineKeyboardButton("➕ إضافة نص", callback_data="add_t")],
+        [InlineKeyboardButton("📋 عرض القنوات", callback_data="view_c")],
         [InlineKeyboardButton("🔙 رجوع", callback_data="home")]
     ])
 
@@ -32,25 +33,33 @@ def register(bot, db, cur, admin_id):
     async def cb_handler(_, q: CallbackQuery):
         data = q.data
         
+        # التنقل بين القوائم
         if data == "home":
-            await q.message.edit_text("🎮 القائمة الرئيسية:", reply_markup=main_menu())
+            await q.edit_message_text("🎮 القائمة الرئيسية:", reply_markup=main_menu())
             
-        elif data == "ai_settings":
-            await q.message.edit_text("🧠 **إعدادات الذكاء الاصطناعي**\nتحكم بكيفية رد حسابك على المستخدمين:", reply_markup=ai_menu())
+        elif data == "p_menu":
+            await q.edit_message_text("📢 **إدارة النشر التلقائي**\nأضف القنوات والنصوص التي تريد من حسابك نشرها:", reply_markup=publish_menu())
 
-        elif data == "edit_prompt":
-            pending[q.from_user.id] = "set_prompt"
-            await q.message.reply("📝 **أرسل الآن وصف الشخصية الجديد**\n(مثال: أريدك أن ترد كخبير تقني بلهجة عراقية)")
+        elif data == "settings":
+            await q.edit_message_text("⚙️ **الإعدادات العامة**\nتحكم بوضع الحساب والخصوصية:", reply_markup=main_menu())
+
+        elif data == "ai_settings":
+            await q.edit_message_text("🧠 **إعدادات شخصية AI**\nتعديل طريقة رد الحساب على الرسائل:", reply_markup=main_menu())
+
+        # عمليات الإضافة
+        elif data == "add_c":
+            pending[q.from_user.id] = "chat"
+            await q.message.reply("📌 أرسل يوزر القناة الآن (مثال: @username):")
             await q.answer()
 
-        elif data == "clients_list":
-            # جلب آخر 10 أشخاص راسلوا البوت من قاعدة البيانات
-            await q.answer("جاري جلب القائمة...", show_alert=False)
-            await q.message.reply("👥 **قائمة العملاء الأخيرة:**\nقريباً سيتم عرض الأسماء هنا.")
+        elif data == "add_t":
+            pending[q.from_user.id] = "text"
+            await q.message.reply("📝 أرسل نص الإعلان الجديد:")
+            await q.answer()
 
         elif data == "stats":
             count = cur.execute("SELECT COUNT(*) FROM targets").fetchone()[0]
-            await q.answer(f"📊 عدد القنوات: {count}\n🤖 ردود AI: 142", show_alert=True)
+            await q.answer(f"📊 عدد القنوات المضافة حالياً: {count}", show_alert=True)
 
     @bot.on_message(filters.text & filters.user(admin_id) & filters.private)
     async def inputs(_, m: Message):
@@ -58,6 +67,11 @@ def register(bot, db, cur, admin_id):
         if uid not in pending: return
         
         mode = pending.pop(uid)
-        if mode == "set_prompt":
-            # هنا يتم حفظ "الشخصية" في قاعدة البيانات ليستخدمها AI في الردود
-            await m.reply(f"✅ تم تحديث شخصية الـ AI إلى:\n`{m.text}`")
+        if mode == "chat":
+            cur.execute("INSERT OR IGNORE INTO targets (id) VALUES (?)", (m.text,))
+            db.commit()
+            await m.reply(f"✅ تمت إضافة القناة بنجاح: {m.text}")
+        elif mode == "text":
+            cur.execute("INSERT INTO messages (content) VALUES (?)", (m.text,))
+            db.commit()
+            await m.reply("✅ تم حفظ النص الجديد للنشر التلقائي.")
