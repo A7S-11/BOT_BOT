@@ -2,7 +2,6 @@ import google.generativeai as genai
 from pyrogram import Client, filters
 import os
 import asyncio
-import random
 import logging
 
 log = logging.getLogger(__name__)
@@ -10,7 +9,7 @@ log = logging.getLogger(__name__)
 # إعداد Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# إعدادات كسر الفلاتر لضمان الرد مهما كان الكلام
+# إعدادات صارمة لكسر فلاتر المحتوى - حتى يجاوب بكل حرية
 safety_settings = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -26,22 +25,29 @@ def register(app, db, cur):
         user_name = m.from_user.first_name or "الغالي"
         
         try:
+            # إظهار حالة جاري الكتابة
             await client.send_chat_action(m.chat.id, "typing")
             
-            # تعليمات "صارمة" جداً للذكاء
-            prompt = f"أنت اسمك علوش، مبرمج عراقي ذكي. رد بلهجة عراقية دارجة وقوية على هذا الكلام: {m.text}. اسم المقابل: {user_name}. ممنوع ترد رسمي، خليك شعبي."
+            # برومبت (تعليمات) مكثفة تجبره على التفكير والرد العراقي
+            prompt = (
+                f"أنت 'علوش' مبرمج عراقي حقيقي، لسانك عراقي شعبي بحت. "
+                f"رد بذكاء وفطنة على: '{m.text}'. "
+                f"ملاحظة: المقابل اسمه {user_name}. "
+                f"ردك لازم يكون عراقي 100% وممنوع ترد بأي لغة ثانية أو بأسلوب رسمي. "
+                f"انطلق!"
+            )
             
-            # طلب الرد مع إيقاف الحماية
+            # طلب التوليد من الذكاء فقط
             response = model.generate_content(prompt, safety_settings=safety_settings)
             
             if response.text:
-                await asyncio.sleep(1)
+                # تأخير بسيط جداً حتى يبين إنه فكر قبل الرد
+                await asyncio.sleep(1.5)
                 await m.reply(response.text)
-                log.info(f"✅ تم الرد بذكاء حقيقي على {user_name}")
+                log.info(f"✅ رد ذكي من Gemini على: {user_name}")
             else:
-                raise Exception("Empty Response")
+                log.warning("⚠️ الذكاء لم يرجع نصاً (ممكن مشكلة فلاتر)")
                 
         except Exception as e:
-            log.error(f"❌ خطأ بالذكاء: {e}")
-            # إذا فشل كل شي، نرد رد "بشري" بس مو ثابت (عشوائي جداً)
-            await m.reply(f"هلا {user_name}، تدلل عيوني ثواني وأرد عليك بس اخلص البرمجة بيدي.")
+            # هنا ما راح ندز "رد جاهز"، بس نطبع الخطأ باللوكات حتى نصلحه
+            log.error(f"❌ خطأ حقيقي في محرك الذكاء: {e}")
