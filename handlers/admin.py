@@ -26,20 +26,12 @@ def publish_menu():
         [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
     ])
 
-def ai_menu():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("😇 ودي (Friendly)", callback_data="ai_friendly"),
-         InlineKeyboardButton("⚡ هجومي (Aggressive)", callback_data="ai_aggressive")],
-        [InlineKeyboardButton("🎓 خبير (Expert)", callback_data="ai_expert"),
-         InlineKeyboardButton("⏳ استعجال (Scarcity)", callback_data="ai_scarcity")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
-    ])
-
 # ───── تسجيل الهاندلرز ─────
 def register(bot, db, cur, admin_id):
 
     @bot.on_message(filters.command("start") & filters.user(admin_id))
     async def start_cmd(_, m: Message):
+        # هنا نرسل القائمة الرئيسية مع الأزرار
         await m.reply(f"اهلا بك علوش في لوحة التحكم 🤖", reply_markup=main_menu())
 
     @bot.on_callback_query(filters.user(admin_id))
@@ -50,28 +42,18 @@ def register(bot, db, cur, admin_id):
             await q.message.edit_text("🎮 لوحة التحكم الأساسية:", reply_markup=main_menu())
 
         elif data == "page_publish":
-            # هذا السطر هو اللي يظهر الأزرار اللي جانت ناقصة عندك
-            await q.message.edit_text("📢 إدارة النشر التلقائي:\nاستخدم الأزرار لإضافة القنوات أو النصوص.", reply_markup=publish_menu())
-
-        elif data == "page_ai":
-            await q.message.edit_text("🧠 اختر نبرة صوت البوت عند الرد:", reply_markup=ai_menu())
-
-        elif data == "page_dashboard":
-            targets = cur.execute("SELECT COUNT(*) FROM targets").fetchone()[0]
-            msgs = cur.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-            clients = cur.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
-            text = f"📊 **Dashboard**\n\n🎯 القنوات: {targets}\n📝 النصوص: {msgs}\n👥 العملاء: {clients}"
-            await q.message.edit_text(text, reply_markup=main_menu())
+            # تحديث الرسالة لتظهر أزرار "إضافة قناة" و "إضافة نص"
+            await q.message.edit_text("📢 إدارة النشر التلقائي:\n\nاضغط على الأزرار أدناه للإدارة:", reply_markup=publish_menu())
 
         elif data == "add_chat":
             pending[q.from_user.id] = "chat"
-            await q.answer("أرسل يوزر القناة الآن...")
-            await q.message.reply("📌 أرسل الآن يوزرنيم القناة (مثلاً: @channel_user) أو الآيدي:")
+            await q.answer("أرسل اليوزر الآن")
+            await q.message.reply("📌 أرسل الآن يوزر القناة (مثلاً @user) أو الآيدي:")
 
         elif data == "add_msg":
             pending[q.from_user.id] = "msg"
-            await q.answer("أرسل نص الإعلان...")
-            await q.message.reply("📝 أرسل الآن نص الإعلان الجديد الذي سيتم نشره:")
+            await q.answer("أرسل النص الآن")
+            await q.message.reply("📝 أرسل الآن نص الإعلان الجديد:")
 
     @bot.on_message(filters.text & filters.user(admin_id) & filters.private)
     async def handle_inputs(_, m: Message):
@@ -82,15 +64,12 @@ def register(bot, db, cur, admin_id):
         mode = pending.pop(user_id)
         val = m.text.strip()
 
-        try:
-            if mode == "chat":
-                cur.execute("INSERT OR IGNORE INTO targets (id) VALUES (?)", (val,))
-                db.commit()
-                await m.reply(f"✅ تمت إضافة القناة `{val}` بنجاح إلى القائمة.")
-            
-            elif mode == "msg":
-                cur.execute("INSERT INTO messages (content) VALUES (?)", (val,))
-                db.commit()
-                await m.reply("✅ تم حفظ نص الإعلان الجديد بنجاح.")
-        except Exception as e:
-            await m.reply(f"❌ حدث خطأ أثناء الحفظ: {e}")
+        if mode == "chat":
+            cur.execute("INSERT OR IGNORE INTO targets (id) VALUES (?)", (val,))
+            db.commit()
+            await m.reply(f"✅ تمت إضافة القناة `{val}` بنجاح.")
+        
+        elif mode == "msg":
+            cur.execute("INSERT INTO messages (content) VALUES (?)", (val,))
+            db.commit()
+            await m.reply("✅ تم حفظ النص بنجاح.")
