@@ -1,4 +1,4 @@
-import os
+ import os
 import shutil
 import asyncio
 import logging
@@ -19,24 +19,22 @@ SESSION_NAME = "user"
 SESSION_FILE = f"{SESSION_NAME}.session"
 
 async def main():
-    log.info("🚀 بدء تشغيل النظام الهجين...")
+    log.info("🚀 تشغيل النظام الهجين: لوحة شفافة + نشر تلقائي...")
 
-    # 1. إدارة ملف السشن
+    # نقل ملف السشن لمجلد البيانات في Railway
     if os.path.exists(SESSION_FILE) and not os.path.exists(f"{DATA_DIR}/{SESSION_FILE}"):
         shutil.copy(SESSION_FILE, f"{DATA_DIR}/{SESSION_FILE}")
 
-    # 2. الاتصال بقاعدة البيانات
     db, cur = get_db()
 
-    # 3. عميل الحساب الشخصي (للنشر والرد التلقائي)
+    # عميل الحساب الشخصي (user_session) - للنشر والرد
     app = Client(
         name=f"{DATA_DIR}/{SESSION_NAME}",
         api_id=config.API_ID,
         api_hash=config.API_HASH
     )
 
-    # 4. عميل البوت الرسمي (لوحة التحكم بالأزرار الشفافة)
-    # تأكد من تعريف BOT_TOKEN في ملف config.py
+    # عميل البوت الرسمي (bot_admin) - لعرض الأزرار الشفافة
     bot_app = Client(
         name="bot_admin",
         api_id=config.API_ID,
@@ -44,18 +42,15 @@ async def main():
         bot_token=config.BOT_TOKEN
     )
 
-    # 5. تسجيل الهاندلرز
-    # لوحة التحكم تعمل من خلال البوت الرسمي لتظهر الأزرار الشفافة
+    # تسجيل اللوحة على بوت التوكن والردود على حسابك
     admin_register(bot_app, db, cur, config.ADMIN_ID)
-    # الردود تعمل من خلال حسابك الشخصي
     chat_register(app, db, cur)
 
-    # 6. تشغيل العملاء
     await app.start()
     await bot_app.start()
-    log.info("💎 الحساب والبوت متصلان وجاهزان!")
+    log.info("✅ النظام متصل: اللوحة تعمل عبر البوت الرسمي!")
 
-    # 7. تشغيل المهام الخلفية (تستخدم حسابك الشخصي)
+    # تشغيل مهام النشر الخلفية باستخدام حسابك
     asyncio.create_task(publisher(app, cur))
     asyncio.create_task(retarget(app, cur))
 
