@@ -1,158 +1,116 @@
 from pyrogram import filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
+import logging
 
-ADMIN_ID = None
+log = logging.getLogger(__name__)
+
+# ذاكرة مؤقتة لحفظ حالة الإدخال
 pending = {}
 
-# ───── القوائم ─────
-
+# ───── القوائم (Menus) ─────
 def main_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 النشر", callback_data="page_publish")],
-        [InlineKeyboardButton("📊 Dashboard", callback_data="page_dashboard")],
-        [InlineKeyboardButton("🧠 AI", callback_data="page_ai")],
-        [InlineKeyboardButton("👥 العملاء", callback_data="clients")]
+        [InlineKeyboardButton("📢 إدارة النشر", callback_data="page_publish")],
+        [InlineKeyboardButton("🧠 شخصية AI", callback_data="page_ai")],
+        [InlineKeyboardButton("📊 الإحصائيات", callback_data="page_dashboard")],
+        [InlineKeyboardButton("👥 قائمة العملاء", callback_data="clients")],
+        [InlineKeyboardButton("🧹 تصفير البيانات", callback_data="confirm_reset")]
     ])
 
 def publish_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ قناة", callback_data="add_chat"),
-         InlineKeyboardButton("➕ نص", callback_data="add_msg")],
-        [InlineKeyboardButton("📊 القنوات", callback_data="list_chats"),
-         InlineKeyboardButton("📋 النصوص", callback_data="list_msgs")],
-        [InlineKeyboardButton("▶️ تشغيل", callback_data="run"),
-         InlineKeyboardButton("⛔ إيقاف", callback_data="stop")],
+        [InlineKeyboardButton("➕ إضافة قناة", callback_data="add_chat"),
+         InlineKeyboardButton("➕ إضافة نص", callback_data="add_msg")],
+        [InlineKeyboardButton("📋 عرض القنوات", callback_data="list_chats"),
+         InlineKeyboardButton("📝 عرض النصوص", callback_data="list_msgs")],
         [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
     ])
 
 def ai_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("😎 Friendly", callback_data="ai_friendly"),
-         InlineKeyboardButton("🔥 Aggressive", callback_data="ai_aggressive")],
-        [InlineKeyboardButton("🧠 Expert", callback_data="ai_expert"),
-         InlineKeyboardButton("⏳ Scarcity", callback_data="ai_scarcity")],
+        [InlineKeyboardButton("😇 ودي (Friendly)", callback_data="ai_friendly"),
+         InlineKeyboardButton("⚡ هجومي (Aggressive)", callback_data="ai_aggressive")],
+        [InlineKeyboardButton("🎓 خبير (Expert)", callback_data="ai_expert"),
+         InlineKeyboardButton("⏳ استعجال (Scarcity)", callback_data="ai_scarcity")],
         [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
     ])
 
-# ───── التسجيل ─────
+# ───── تسجيل الهاندلرز ─────
+def register(bot, db, cur, admin_id):
 
-def register(bot, cur, db, admin_id):
-    global ADMIN_ID
-    ADMIN_ID = admin_id
+    @bot.on_message(filters.command("start") & filters.user(admin_id))
+    async def start_cmd(_, m: Message):
+        await m.reply(f"اهلا بك علوش في لوحة التحكم 🤖", reply_markup=main_menu())
 
-    # تأكد من الجداول
-    cur.execute("CREATE TABLE IF NOT EXISTS clients (user_id TEXT, score INT, state TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
-    db.commit()
-
-    # ───── START ─────
-    @bot.on_message(filters.command("start"))
-    async def start(_, m):
-        if m.from_user.id != ADMIN_ID:
-            return await m.reply("⛔ غير مصرح")
-
-        await m.reply("🎮 لوحة التحكم", reply_markup=main_menu())
-
-    # ───── الأزرار ─────
-    @bot.on_callback_query()
-    async def buttons(_, q):
-
-        if q.from_user.id != ADMIN_ID:
-            return await q.answer("⛔", True)
-
+    @bot.on_callback_query(filters.user(admin_id))
+    async def callback_handler(_, q: CallbackQuery):
         data = q.data
 
-        if data == "page_publish":
-            await q.message.edit("📢 إدارة النشر", reply_markup=publish_menu())
+        if data == "back":
+            await q.message.edit("🎮 لوحة التحكم الأساسية:", reply_markup=main_menu())
+
+        elif data == "page_publish":
+            await q.message.edit("📢 إدارة النشر التلقائي بالكروبات:", reply_markup=publish_menu())
+
+        elif data == "page_ai":
+            await q.message.edit("🧠 اختر نبرة صوت البوت عند الرد:", reply_markup=ai_menu())
 
         elif data == "page_dashboard":
             targets = cur.execute("SELECT COUNT(*) FROM targets").fetchone()[0]
             msgs = cur.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
             clients = cur.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
-
-            text = f"""
-📊 Dashboard
-
-📢 قنوات: {targets}
-📝 نصوص: {msgs}
-👥 عملاء: {clients}
-"""
+            
+            text = f"📊 **Dashboard**\n\n🎯 القنوات: {targets}\n📝 النصوص: {msgs}\n👥 العملاء: {clients}"
             await q.message.edit(text, reply_markup=main_menu())
-
-        elif data == "page_ai":
-            await q.message.edit("🧠 اختر شخصية AI", reply_markup=ai_menu())
-
-        elif data == "back":
-            await q.message.edit("🎮 لوحة التحكم", reply_markup=main_menu())
 
         elif data.startswith("ai_"):
             style = data.split("_")[1]
-            cur.execute("INSERT OR REPLACE INTO settings VALUES ('ai_style', ?)", (style,))
+            cur.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_style', ?)", (style,))
             db.commit()
-            await q.answer(f"✅ تم تغيير AI إلى {style}", True)
+            await q.answer(f"✅ تم تفعيل أسلوب الـ {style}", show_alert=True)
 
         elif data == "add_chat":
             pending[q.from_user.id] = "chat"
-            await q.message.reply("📌 أرسل آيدي القناة (مثال: -100xxxx)")
+            await q.message.reply("📌 أرسل الآن آيدي القناة أو اليوزرنيم (مثل: -100123 أو @my_group)")
 
         elif data == "add_msg":
             pending[q.from_user.id] = "msg"
-            await q.message.reply("📝 أرسل النص")
+            await q.message.reply("📝 أرسل الآن نص الإعلان الجديد:")
 
         elif data == "list_chats":
             rows = cur.execute("SELECT id FROM targets").fetchall()
-            txt = "\n".join([r[0] for r in rows]) if rows else "❌ لا يوجد"
+            txt = "🎯 **القنوات المضافة:**\n\n" + ("\n".join([f"`{r[0]}`" for r in rows]) if rows else "❌ فارغة")
             await q.message.reply(txt)
 
         elif data == "list_msgs":
-            rows = cur.execute("SELECT content FROM messages").fetchall()
-            txt = "\n\n".join([r[0] for r in rows]) if rows else "❌ لا يوجد"
+            rows = cur.execute("SELECT id, content FROM messages").fetchall()
+            txt = "📝 **النصوص المضافة:**\n\n" + ("\n---\n".join([f"{r[0]}- {r[1]}" for r in rows]) if rows else "❌ فارغة")
             await q.message.reply(txt)
 
-        elif data == "run":
-            bot.running = True
-            await q.answer("▶️ تم التشغيل", True)
-
-        elif data == "stop":
-            bot.running = False
-            await q.answer("⛔ تم الإيقاف", True)
-
         elif data == "clients":
-            rows = cur.execute("SELECT user_id, score, state FROM clients ORDER BY score DESC LIMIT 10").fetchall()
-            txt = "\n".join([f"{u} | {s} | {st}" for u, s, st in rows]) if rows else "❌ لا يوجد"
-            await q.message.edit("👥 العملاء:\n" + txt, reply_markup=main_menu())
+            rows = cur.execute("SELECT user_id, score, state FROM clients ORDER BY score DESC LIMIT 15").fetchall()
+            txt = "👥 **أهم 15 عميل مهتم:**\n\nID | Score | State\n"
+            txt += "\n".join([f"`{u}` | {s} | {st}" for u, s, st in rows]) if rows else "❌ لا يوجد بيانات"
+            await q.message.edit(txt, reply_markup=main_menu())
 
-    # ───── إدخال النص ─────
-    @bot.on_message(filters.text)
-    async def input_handler(_, m):
-
-        if m.from_user.id != ADMIN_ID:
+    @bot.on_message(filters.text & filters.user(admin_id) & filters.private)
+    async def handle_inputs(_, m: Message):
+        user_id = m.from_user.id
+        if user_id not in pending:
             return
 
-        mode = pending.get(m.from_user.id)
-        if not mode:
-            return
-
-        text = m.text.strip()
+        mode = pending.pop(user_id)
+        val = m.text.strip()
 
         try:
             if mode == "chat":
-                if not text.startswith("-100"):
-                    return await m.reply("❌ لازم آيدي قناة صحيح")
-
-                cur.execute("INSERT INTO targets VALUES (?)", (text,))
+                cur.execute("INSERT OR IGNORE INTO targets (id) VALUES (?)", (val,))
                 db.commit()
-                await m.reply("✅ تمت إضافة القناة")
-
+                await m.reply(f"✅ تمت إضافة الهدف: `{val}`")
+            
             elif mode == "msg":
-                if len(text) < 5:
-                    return await m.reply("❌ النص قصير")
-
-                cur.execute("INSERT INTO messages VALUES (?)", (text,))
+                cur.execute("INSERT INTO messages (content) VALUES (?)", (val,))
                 db.commit()
-                await m.reply("✅ تم حفظ النص")
-
+                await m.reply("✅ تم حفظ النص بنجاح.")
         except Exception as e:
-            await m.reply(f"❌ خطأ: {e}")
-
-        pending.pop(m.from_user.id, None)
+            await m.reply(f"❌ حدث خطأ: {e}")
