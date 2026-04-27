@@ -56,6 +56,7 @@ def register(bot, db, cur, admin_id):
             await q.message.edit("🧠 اختر نبرة صوت البوت عند الرد:", reply_markup=ai_menu())
 
         elif data == "page_dashboard":
+            # جلب الإحصائيات من الجداول الثلاثة
             targets = cur.execute("SELECT COUNT(*) FROM targets").fetchone()[0]
             msgs = cur.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
             clients = cur.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
@@ -83,7 +84,8 @@ def register(bot, db, cur, admin_id):
             await q.message.reply(txt)
 
         elif data == "list_msgs":
-            rows = cur.execute("SELECT id, content FROM messages").fetchall()
+            # جلب النصوص مع معرفاتها (IDs)
+            rows = cur.execute("SELECT rowid, content FROM messages").fetchall()
             txt = "📝 **النصوص المضافة:**\n\n" + ("\n---\n".join([f"{r[0]}- {r[1]}" for r in rows]) if rows else "❌ فارغة")
             await q.message.reply(txt)
 
