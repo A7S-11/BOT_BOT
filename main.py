@@ -24,9 +24,9 @@ userbot = Client("user", config.API_ID, config.API_HASH)
 async def main():
     db, cur = get_db()
 
-    # ✅ التصحيح هنا
-    chat_register(bot, db, cur)
-    admin_register(bot, db, cur)
+    # ✅ تسجيل الهاندلرز (مصَحَّح)
+    chat_register(bot, cur)
+    admin_register(bot, db, cur, config.ADMIN_ID)
 
     # تشغيل
     await bot.start()
@@ -34,7 +34,7 @@ async def main():
 
     log.info("🤖 Bot Started")
 
-    # تشغيل المهام
+    # مهام آمنة
     async def safe_task(coro_func, name):
         while True:
             try:
