@@ -5,41 +5,38 @@ pending = {}
 
 def main_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📢 إدارة النشر", callback_data="p_menu"),
-         InlineKeyboardButton("📊 الإحصائيات", callback_data="stats")],
-        [InlineKeyboardButton("🧠 شخصية AI", callback_data="ai_menu")],
-        [InlineKeyboardButton("🧹 تصفير البيانات", callback_data="reset")]
-    ])
-
-def publish_menu():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ إضافة قناة", callback_data="add_c"),
-         InlineKeyboardButton("➕ إضافة نص", callback_data="add_t")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="home")]
+        [InlineKeyboardButton("📢 إضافة نص", callback_data="add_msg"),
+         InlineKeyboardButton("➕ إضافة قناة", callback_data="add_chat")],
+        [InlineKeyboardButton("📋 عرض النصوص", callback_data="list_msgs"),
+         InlineKeyboardButton("📊 عرض القنوات", callback_data="list_chats")],
+        [InlineKeyboardButton("❌ حذف نص", callback_data="del_msg"),
+         InlineKeyboardButton("❌ حذف قناة", callback_data="del_chat")],
+        [InlineKeyboardButton("⚙️ حالة النشر: شغال ✅", callback_data="toggle_pub")],
+        [InlineKeyboardButton("🔙 إيقاف ⛔", callback_data="stop_pub"),
+         InlineKeyboardButton("▶️ تشغيل", callback_data="start_pub")]
     ])
 
 def register(bot, db, cur, admin_id):
 
     @bot.on_message(filters.command("start") & filters.user(admin_id))
     async def start_cmd(_, m: Message):
-        await m.reply("👋 هلا علوش، لوحة التحكم المحدثة وصلت!\nتحكم بنشر حسابك من هنا:", reply_markup=main_menu())
+        await m.reply(f"هلا علوش، لوحة التحكم المحدثة 🤚\n\nتحكم بنشر حسابك الشخصي من هنا:", reply_markup=main_menu())
 
     @bot.on_callback_query(filters.user(admin_id))
     async def cb_handler(_, q: CallbackQuery):
-        if q.data == "home":
-            await q.message.edit_text("🎮 القائمة الرئيسية:", reply_markup=main_menu())
-        elif q.data == "p_menu":
-            await q.message.edit_text("📢 إدارة النشر:", reply_markup=publish_menu())
-        elif q.data == "add_c":
+        data = q.data
+        if data == "add_chat":
             pending[q.from_user.id] = "chat"
-            await q.message.reply("📌 أرسل يوزر القناة الآن:")
+            await q.message.reply("📌 أرسل الآن يوزر القناة أو الآيدي:")
             await q.answer()
-        elif q.data == "stats":
-            count = cur.execute("SELECT COUNT(*) FROM targets").fetchone()[0]
-            await q.answer(f"عدد القنوات: {count}", show_alert=True)
+        elif data == "add_msg":
+            pending[q.from_user.id] = "msg"
+            await q.message.reply("📝 أرسل الآن نص الإعلان الجديد:")
+            await q.answer()
+        # يمكنك إضافة بقية منطق الأزرار هنا (عرض، حذف، إلخ)
 
     @bot.on_message(filters.text & filters.user(admin_id) & filters.private)
-    async def inputs(_, m: Message):
+    async def input_handler(_, m: Message):
         uid = m.from_user.id
         if uid not in pending: return
         
@@ -48,3 +45,7 @@ def register(bot, db, cur, admin_id):
             cur.execute("INSERT OR IGNORE INTO targets (id) VALUES (?)", (m.text,))
             db.commit()
             await m.reply(f"✅ تمت إضافة القناة: {m.text}")
+        elif mode == "msg":
+            cur.execute("INSERT INTO messages (content) VALUES (?)", (m.text,))
+            db.commit()
+            await m.reply("✅ تم حفظ نص الإعلان الجديد.")
