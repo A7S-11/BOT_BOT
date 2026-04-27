@@ -9,10 +9,10 @@ log = logging.getLogger(__name__)
 # إعداد Gemini
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# تحديث اسم الموديل للنسخة الجديدة والمستقرة
+# الموديل الصحيح والشغال حالياً هو 1.5 فلاش
 model = genai.GenerativeModel('gemini-1.5-flash')
 
-# إعدادات كسر الفلاتر لضمان الرد الشعبي
+# إعدادات الأمان لفتح قفل اللهجة العراقية
 safety_settings = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -28,28 +28,30 @@ def register(app, db, cur):
         try:
             await client.send_chat_action(m.chat.id, "typing")
             
-            # محاولة الرد العراقي الذكي
-            prompt_iraqi = (
-                f"أنت علوش مبرمج عراقي، رد بلهجة عراقية دارجة وقوية "
-                f"على: '{m.text}'. اسم المرسل: {user_name}."
+            # تعليمات واضحة للموديل
+            prompt = (
+                f"أنت علوش، مبرمج عراقي ذكي. "
+                f"رد بلهجة عراقية شعبية قوية على: '{m.text}'. "
+                f"اسم المقابل: {user_name}. "
+                f"ممنوع ترد رسمي، خلي ردك ذكي ويسولف وياه."
             )
             
-            response = model.generate_content(prompt_iraqi, safety_settings=safety_settings)
+            # طلب التوليد
+            response = model.generate_content(prompt, safety_settings=safety_settings)
             
             if response and response.text:
-                await asyncio.sleep(1)
+                await asyncio.sleep(1) # حتى يبين حقيقي
                 await m.reply(response.text)
-                log.info(f"✅ تم الرد بالعراقي المحدث على {user_name}")
+                log.info(f"✅ تم الرد بذكاء (عراقي) على {user_name}")
             else:
-                raise Exception("فشل توليد النص")
+                raise Exception("Empty text from AI")
 
         except Exception as e:
-            log.warning(f"⚠️ فشل العراقي، جاري محاولة الفصحى: {e}")
+            log.error(f"❌ خطأ بالذكاء: {e}")
+            # إذا فشل العراقي، نجرب فصحى بس بذكاء (بدون رد جاهز)
             try:
-                # محاولة الفصحى الرسمية كخطة بديلة
-                prompt_formal = f"أجب بذكاء وباللغة العربية الفصحى على: {m.text}"
-                response_formal = model.generate_content(prompt_formal)
-                if response_formal.text:
-                    await m.reply(response_formal.text)
-            except Exception as e2:
-                log.error(f"❌ فشل كلي: {e2}")
+                formal_res = model.generate_content(f"رد بذكاء وباللغة العربية على: {m.text}")
+                if formal_res.text:
+                    await m.reply(formal_res.text)
+            except:
+                pass
