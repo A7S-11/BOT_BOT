@@ -1,4 +1,4 @@
- import google.generativeai as genai
+import google.generativeai as genai
 from pyrogram import Client, filters
 import os
 import asyncio
