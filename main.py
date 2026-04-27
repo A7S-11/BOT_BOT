@@ -26,52 +26,53 @@ SESSION_NAME = "user"
 SESSION_FILE = f"{SESSION_NAME}.session"
 
 async def main():
-    log.info("🚀 Starting Bot...")
+    log.info("🚀 بدء تشغيل البوت...")
 
-    # 1. إدارة ملف السشن (نقل الملف من GitHub إلى المجلد المحمي)
+    # 1. إدارة ملف السشن
     if os.path.exists(SESSION_FILE) and not os.path.exists(f"{DATA_DIR}/{SESSION_FILE}"):
         try:
             shutil.copy(SESSION_FILE, f"{DATA_DIR}/{SESSION_FILE}")
-            log.info(f"✅ Moved {SESSION_FILE} to {DATA_DIR}")
+            log.info(f"✅ تم نقل ملف {SESSION_FILE} إلى {DATA_DIR}")
         except Exception as e:
-            log.error(f"❌ Failed to move session: {e}")
+            log.error(f"❌ فشل نقل ملف السشن: {e}")
 
     # 2. الاتصال بقاعدة البيانات
     try:
         db, cur = get_db()
-        log.info("✅ Database connected.")
+        log.info("✅ تم الاتصال بقاعدة البيانات")
     except Exception as e:
-        log.error(f"🔥 Database error: {e}")
+        log.error(f"🔥 خطأ في قاعدة البيانات: {e}")
         return
 
-    # 3. تعريف عميل Pyrogram مع مسار السشن بداخل الفوليوم
-    # ملاحظة: نستخدم المسار بداخل DATA_DIR لضمان الاستمرارية
+    # 3. تعريف عميل Pyrogram
     app = Client(
         name=f"{DATA_DIR}/{SESSION_NAME}",
         api_id=config.API_ID,
         api_hash=config.API_HASH
     )
 
-    # 4. تسجيل الهاندلرز (الأدمن والدردشة)
+    # 4. تسجيل الهاندلرز (تأكد من تمرير المتغيرات المطلوبة فقط)
+    # ملاحظة: دالة الأدمن تحتاج (bot, db, cur, admin_id)
     admin_register(app, db, cur, config.ADMIN_ID)
+    
+    # ملاحظة: دالة الدردشة تحتاج (bot, db, cur)
     chat_register(app, db, cur)
 
     # 5. بدء تشغيل البوت
     await app.start()
-    log.info("💎 Bot is online and connected!")
+    log.info("💎 البوت الآن متصل وشغال!")
 
-    # 6. تشغيل المهام الخلفية (Background Tasks)
-    # تشغيل الناشر وإعادة الاستهداف كمهام غير متزامنة
+    # 6. تشغيل المهام الخلفية
     asyncio.create_task(publisher(app, cur))
     asyncio.create_task(retarget(app, cur))
 
-    # 7. الحفاظ على البوت قيد التشغيل (Idle)
+    # 7. الحفاظ على البوت قيد التشغيل
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        log.info("👋 Bot stopped by user.")
+        log.info("👋 تم إيقاف البوت.")
     except Exception as e:
-        log.error(f"🔥 Critical error: {e}")
+        log.error(f"🔥 خطأ حرج: {e}")
