@@ -47,53 +47,31 @@ def register(bot, db, cur, admin_id):
         data = q.data
 
         if data == "back":
-            await q.message.edit("🎮 لوحة التحكم الأساسية:", reply_markup=main_menu())
+            await q.message.edit_text("🎮 لوحة التحكم الأساسية:", reply_markup=main_menu())
 
         elif data == "page_publish":
-            await q.message.edit("📢 إدارة النشر التلقائي بالكروبات:", reply_markup=publish_menu())
+            # هذا السطر هو اللي يظهر الأزرار اللي جانت ناقصة عندك
+            await q.message.edit_text("📢 إدارة النشر التلقائي:\nاستخدم الأزرار لإضافة القنوات أو النصوص.", reply_markup=publish_menu())
 
         elif data == "page_ai":
-            await q.message.edit("🧠 اختر نبرة صوت البوت عند الرد:", reply_markup=ai_menu())
+            await q.message.edit_text("🧠 اختر نبرة صوت البوت عند الرد:", reply_markup=ai_menu())
 
         elif data == "page_dashboard":
-            # جلب الإحصائيات من الجداول الثلاثة
             targets = cur.execute("SELECT COUNT(*) FROM targets").fetchone()[0]
             msgs = cur.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
             clients = cur.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
-            
             text = f"📊 **Dashboard**\n\n🎯 القنوات: {targets}\n📝 النصوص: {msgs}\n👥 العملاء: {clients}"
-            await q.message.edit(text, reply_markup=main_menu())
-
-        elif data.startswith("ai_"):
-            style = data.split("_")[1]
-            cur.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('ai_style', ?)", (style,))
-            db.commit()
-            await q.answer(f"✅ تم تفعيل أسلوب الـ {style}", show_alert=True)
+            await q.message.edit_text(text, reply_markup=main_menu())
 
         elif data == "add_chat":
             pending[q.from_user.id] = "chat"
-            await q.message.reply("📌 أرسل الآن آيدي القناة أو اليوزرنيم (مثل: -100123 أو @my_group)")
+            await q.answer("أرسل يوزر القناة الآن...")
+            await q.message.reply("📌 أرسل الآن يوزرنيم القناة (مثلاً: @channel_user) أو الآيدي:")
 
         elif data == "add_msg":
             pending[q.from_user.id] = "msg"
-            await q.message.reply("📝 أرسل الآن نص الإعلان الجديد:")
-
-        elif data == "list_chats":
-            rows = cur.execute("SELECT id FROM targets").fetchall()
-            txt = "🎯 **القنوات المضافة:**\n\n" + ("\n".join([f"`{r[0]}`" for r in rows]) if rows else "❌ فارغة")
-            await q.message.reply(txt)
-
-        elif data == "list_msgs":
-            # جلب النصوص مع معرفاتها (IDs)
-            rows = cur.execute("SELECT rowid, content FROM messages").fetchall()
-            txt = "📝 **النصوص المضافة:**\n\n" + ("\n---\n".join([f"{r[0]}- {r[1]}" for r in rows]) if rows else "❌ فارغة")
-            await q.message.reply(txt)
-
-        elif data == "clients":
-            rows = cur.execute("SELECT user_id, score, state FROM clients ORDER BY score DESC LIMIT 15").fetchall()
-            txt = "👥 **أهم 15 عميل مهتم:**\n\nID | Score | State\n"
-            txt += "\n".join([f"`{u}` | {s} | {st}" for u, s, st in rows]) if rows else "❌ لا يوجد بيانات"
-            await q.message.edit(txt, reply_markup=main_menu())
+            await q.answer("أرسل نص الإعلان...")
+            await q.message.reply("📝 أرسل الآن نص الإعلان الجديد الذي سيتم نشره:")
 
     @bot.on_message(filters.text & filters.user(admin_id) & filters.private)
     async def handle_inputs(_, m: Message):
@@ -108,11 +86,11 @@ def register(bot, db, cur, admin_id):
             if mode == "chat":
                 cur.execute("INSERT OR IGNORE INTO targets (id) VALUES (?)", (val,))
                 db.commit()
-                await m.reply(f"✅ تمت إضافة الهدف: `{val}`")
+                await m.reply(f"✅ تمت إضافة القناة `{val}` بنجاح إلى القائمة.")
             
             elif mode == "msg":
                 cur.execute("INSERT INTO messages (content) VALUES (?)", (val,))
                 db.commit()
-                await m.reply("✅ تم حفظ النص بنجاح.")
+                await m.reply("✅ تم حفظ نص الإعلان الجديد بنجاح.")
         except Exception as e:
-            await m.reply(f"❌ حدث خطأ: {e}")
+            await m.reply(f"❌ حدث خطأ أثناء الحفظ: {e}")
