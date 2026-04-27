@@ -1,17 +1,13 @@
-# core/learning.py
+import logging
+
+log = logging.getLogger(__name__)
 
 def update_style_stats(cur, style: str, success: int):
     """
-    تحديث إحصائيات الأسلوب:
-    success = 1 إذا الصفقة نجحت، 0 إذا لا
+    تحديث إحصائيات الأسلوب لزيادة دقة اختيار الأسلوب الأنجح مستقبلاً.
     """
-    # حاول تحدّث، وإذا ما موجود أضِف
-    row = cur.execute(
-        "SELECT style FROM style_stats WHERE style = ?",
-        (style,)
-    ).fetchone()
-
-    if row:
+    try:
+        # تحديث مباشر لأننا ضمنا وجود الأساليب في ملف db.py
         cur.execute(
             """
             UPDATE style_stats
@@ -20,52 +16,60 @@ def update_style_stats(cur, style: str, success: int):
             """,
             (success, style)
         )
-    else:
-        cur.execute(
-            """
-            INSERT INTO style_stats (style, success, total)
-            VALUES (?, ?, 1)
-            """,
-            (style, success)
-        )
+        # التأكد من الحفظ
+        cur.connection.commit()
+    except Exception as e:
+        log.error(f"❌ Error updating style stats: {e}")
 
 
 def mark_last_success(cur):
     """
-    تعليم آخر رد كـ صفقة ناجحة + تحديث إحصائيات الأسلوب
+    يُستخدم هذا الفانكشن عادةً عند استلام رقم هاتف أو إتمام بيعة.
     """
-    row = cur.execute(
-        "SELECT id, style FROM learning_data ORDER BY id DESC LIMIT 1"
-    ).fetchone()
+    try:
+        # جلب آخر رد قام به البوت
+        row = cur.execute(
+            "SELECT id, style FROM learning_data ORDER BY id DESC LIMIT 1"
+        ).fetchone()
 
-    if not row:
+        if not row:
+            return False
+
+        last_id, style = row
+
+        # تعليم الرد كـ ناجح
+        cur.execute(
+            "UPDATE learning_data SET success = 1 WHERE id = ?",
+            (last_id,)
+        )
+
+        # تحديث إحصائيات الأسلوب الذي استُخدم في هذا الرد
+        update_style_stats(cur, style, 1)
+        
+        cur.connection.commit()
+        return True
+    except Exception as e:
+        log.error(f"❌ Error marking success: {e}")
         return False
 
-    last_id, style = row
 
-    cur.execute(
-        "UPDATE learning_data SET success = 1 WHERE id = ?",
-        (last_id,)
-    )
-
-    # حدّث أداء الأسلوب
-    update_style_stats(cur, style, 1)
-
-    return True
-
-
-def get_best_replies(cur, limit: int = 10):
+def get_best_replies(cur, limit: int = 5):
     """
-    جلب أفضل الردود الناجحة لاستخدامها داخل AI
+    جلب أفضل الردود التي أدت لنتائج ناجحة سابقاً لتزويد الـ AI بها (Few-shot prompting).
     """
-    rows = cur.execute(
-        """
-        SELECT bot_reply FROM learning_data
-        WHERE success = 1
-        ORDER BY id DESC
-        LIMIT ?
-        """,
-        (limit,)
-    ).fetchall()
+    try:
+        rows = cur.execute(
+            """
+            SELECT bot_reply FROM learning_data
+            WHERE success = 1
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,)
+        ).fetchall()
 
-    return [r[0] for r in rows]
+        # إذا ماكو ردود ناجحة بعد، نرجع قائمة فارغة حتى ما يضرب الـ AI
+        return [r[0] for r in rows] if rows else []
+    except Exception as e:
+        log.error(f"❌ Error getting best replies: {e}")
+        return []
