@@ -9,45 +9,62 @@ from handlers.admin import register as admin_register
 import config
 
 # ───── Logging ─────
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 log = logging.getLogger(__name__)
 
-# ───── تحقق من الإعدادات ─────
-if not config.API_ID or not config.API_HASH or not config.BOT_TOKEN:
-    raise ValueError("❌ تأكد من API_ID / API_HASH / BOT_TOKEN")
-
 # ───── Clients ─────
-bot = Client("bot", config.API_ID, config.API_HASH, bot_token=config.BOT_TOKEN)
-userbot = Client("user", config.API_ID, config.API_HASH)
+# ملاحظة: إذا كنت تستخدم String Session للـ Userbot ضيفها هنا
+bot = Client(
+    "bot_session", 
+    api_id=config.API_ID, 
+    api_hash=config.API_HASH, 
+    bot_token=config.BOT_TOKEN
+)
+
+userbot = Client(
+    "user_session", 
+    api_id=config.API_ID, 
+    api_hash=config.API_HASH
+)
 
 # ───── Main ─────
 async def main():
+    # استدعاء قاعدة البيانات
     db, cur = get_db()
 
-    # ✅ تسجيل الهاندلرز (مصَحَّح)
+    # تسجيل الهاندلرز
     chat_register(bot, cur)
     admin_register(bot, db, cur, config.ADMIN_ID)
 
-    # تشغيل
+    # تشغيل الكلاينت
+    log.info("🚀 Starting Clients...")
     await bot.start()
     await userbot.start()
 
-    log.info("🤖 Bot Started")
+    log.info("🤖 Bot and Userbot are online!")
 
-    # مهام آمنة
-    async def safe_task(coro_func, name):
+    # دالة المهام الآمنة (تعديل بسيط لضمان تمرير الـ arguments بشكل صحيح)
+    async def safe_task(coro_func, name, *args):
         while True:
             try:
-                await coro_func()
+                log.info(f"⏳ Starting task: {name}")
+                await coro_func(*args)
             except Exception as e:
                 log.error(f"❌ Error in {name}: {e}")
-                await asyncio.sleep(5)
+                await asyncio.sleep(10) # انتظار قليل قبل إعادة المحاولة
 
-    asyncio.create_task(safe_task(lambda: publisher(userbot, cur), "publisher"))
-    asyncio.create_task(safe_task(lambda: retarget(bot, cur), "retarget"))
+    # تشغيل المهام الخلفية
+    asyncio.create_task(safe_task(publisher, "publisher", userbot, cur))
+    asyncio.create_task(safe_task(retarget, "retarget", bot, cur))
 
+    # الحفاظ على البوت يعمل للأبد
     await asyncio.Event().wait()
 
-# ───── Run ─────
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log.info("👋 Bot stopped by user.")
