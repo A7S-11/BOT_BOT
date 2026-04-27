@@ -16,22 +16,22 @@ def main_menu():
 
 def publish_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ قناة", "add_chat"),
-         InlineKeyboardButton("➕ نص", "add_msg")],
-        [InlineKeyboardButton("📊 القنوات", "list_chats"),
-         InlineKeyboardButton("📋 النصوص", "list_msgs")],
-        [InlineKeyboardButton("▶️ تشغيل", "run"),
-         InlineKeyboardButton("⛔ إيقاف", "stop")],
-        [InlineKeyboardButton("🔙 رجوع", "back")]
+        [InlineKeyboardButton("➕ قناة", callback_data="add_chat"),
+         InlineKeyboardButton("➕ نص", callback_data="add_msg")],
+        [InlineKeyboardButton("📊 القنوات", callback_data="list_chats"),
+         InlineKeyboardButton("📋 النصوص", callback_data="list_msgs")],
+        [InlineKeyboardButton("▶️ تشغيل", callback_data="run"),
+         InlineKeyboardButton("⛔ إيقاف", callback_data="stop")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
     ])
 
 def ai_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("😎 Friendly", "ai_friendly"),
-         InlineKeyboardButton("🔥 Aggressive", "ai_aggressive")],
-        [InlineKeyboardButton("🧠 Expert", "ai_expert"),
-         InlineKeyboardButton("⏳ Scarcity", "ai_scarcity")],
-        [InlineKeyboardButton("🔙 رجوع", "back")]
+        [InlineKeyboardButton("😎 Friendly", callback_data="ai_friendly"),
+         InlineKeyboardButton("🔥 Aggressive", callback_data="ai_aggressive")],
+        [InlineKeyboardButton("🧠 Expert", callback_data="ai_expert"),
+         InlineKeyboardButton("⏳ Scarcity", callback_data="ai_scarcity")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="back")]
     ])
 
 # ───── التسجيل ─────
@@ -39,6 +39,11 @@ def ai_menu():
 def register(bot, cur, db, admin_id):
     global ADMIN_ID
     ADMIN_ID = admin_id
+
+    # تأكد من الجداول
+    cur.execute("CREATE TABLE IF NOT EXISTS clients (user_id TEXT, score INT, state TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+    db.commit()
 
     # ───── START ─────
     @bot.on_message(filters.command("start"))
@@ -57,7 +62,6 @@ def register(bot, cur, db, admin_id):
 
         data = q.data
 
-        # ───── صفحات ─────
         if data == "page_publish":
             await q.message.edit("📢 إدارة النشر", reply_markup=publish_menu())
 
@@ -65,7 +69,6 @@ def register(bot, cur, db, admin_id):
             targets = cur.execute("SELECT COUNT(*) FROM targets").fetchone()[0]
             msgs = cur.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
             clients = cur.execute("SELECT COUNT(*) FROM clients").fetchone()[0]
-            deals = cur.execute("SELECT COUNT(*) FROM learning_data WHERE success=1").fetchone()[0]
 
             text = f"""
 📊 Dashboard
@@ -73,7 +76,6 @@ def register(bot, cur, db, admin_id):
 📢 قنوات: {targets}
 📝 نصوص: {msgs}
 👥 عملاء: {clients}
-💰 صفقات: {deals}
 """
             await q.message.edit(text, reply_markup=main_menu())
 
@@ -83,57 +85,41 @@ def register(bot, cur, db, admin_id):
         elif data == "back":
             await q.message.edit("🎮 لوحة التحكم", reply_markup=main_menu())
 
-        # ───── AI Style ─────
         elif data.startswith("ai_"):
             style = data.split("_")[1]
-
-            cur.execute("""
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-            """)
-
             cur.execute("INSERT OR REPLACE INTO settings VALUES ('ai_style', ?)", (style,))
             db.commit()
+            await q.answer(f"✅ تم تغيير AI إلى {style}", True)
 
-            await q.answer(f"✅ تم تغيير الأسلوب إلى {style}", True)
-
-        # ───── إضافة قناة ─────
         elif data == "add_chat":
             pending[q.from_user.id] = "chat"
-            await q.message.reply("📌 أرسل آيدي أو يوزر")
+            await q.message.reply("📌 أرسل آيدي القناة (مثال: -100xxxx)")
 
-        # ───── إضافة نص ─────
         elif data == "add_msg":
             pending[q.from_user.id] = "msg"
             await q.message.reply("📝 أرسل النص")
 
-        # ───── عرض القنوات ─────
         elif data == "list_chats":
             rows = cur.execute("SELECT id FROM targets").fetchall()
             txt = "\n".join([r[0] for r in rows]) if rows else "❌ لا يوجد"
             await q.message.reply(txt)
 
-        # ───── عرض النصوص ─────
         elif data == "list_msgs":
             rows = cur.execute("SELECT content FROM messages").fetchall()
             txt = "\n\n".join([r[0] for r in rows]) if rows else "❌ لا يوجد"
             await q.message.reply(txt)
 
-        # ───── تشغيل ─────
         elif data == "run":
             bot.running = True
-            await q.answer("▶️ شغال", True)
+            await q.answer("▶️ تم التشغيل", True)
 
         elif data == "stop":
             bot.running = False
-            await q.answer("⛔ متوقف", True)
+            await q.answer("⛔ تم الإيقاف", True)
 
-        # ───── العملاء ─────
         elif data == "clients":
             rows = cur.execute("SELECT user_id, score, state FROM clients ORDER BY score DESC LIMIT 10").fetchall()
-            txt = "\n".join([f"{u} | {s} | {st}" for u, s, st in rows]) if rows else "❌"
+            txt = "\n".join([f"{u} | {s} | {st}" for u, s, st in rows]) if rows else "❌ لا يوجد"
             await q.message.edit("👥 العملاء:\n" + txt, reply_markup=main_menu())
 
     # ───── إدخال النص ─────
@@ -149,14 +135,24 @@ def register(bot, cur, db, admin_id):
 
         text = m.text.strip()
 
-        if mode == "chat":
-            cur.execute("INSERT INTO targets VALUES (?)", (text,))
-            db.commit()
-            await m.reply("✅ تمت إضافة القناة")
+        try:
+            if mode == "chat":
+                if not text.startswith("-100"):
+                    return await m.reply("❌ لازم آيدي قناة صحيح")
 
-        elif mode == "msg":
-            cur.execute("INSERT INTO messages VALUES (?)", (text,))
-            db.commit()
-            await m.reply("✅ تم حفظ النص")
+                cur.execute("INSERT INTO targets VALUES (?)", (text,))
+                db.commit()
+                await m.reply("✅ تمت إضافة القناة")
 
-        pending[m.from_user.id] = None
+            elif mode == "msg":
+                if len(text) < 5:
+                    return await m.reply("❌ النص قصير")
+
+                cur.execute("INSERT INTO messages VALUES (?)", (text,))
+                db.commit()
+                await m.reply("✅ تم حفظ النص")
+
+        except Exception as e:
+            await m.reply(f"❌ خطأ: {e}")
+
+        pending.pop(m.from_user.id, None)
