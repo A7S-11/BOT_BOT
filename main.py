@@ -4,15 +4,10 @@ import asyncio
 import logging
 from pyrogram import Client
 
-# استيراد الإعدادات وقاعدة البيانات
 import config
 from database.db import get_db
-
-# استيراد الهاندلرز
 from handlers.admin import register as admin_register
 from handlers.chat import register as chat_register
-
-# استيراد المهام الخلفية
 from core.publisher import publisher
 from core.retargeting import retarget
 
@@ -33,35 +28,34 @@ async def main():
     # 2. الاتصال بقاعدة البيانات
     db, cur = get_db()
 
-    # 3. عميل الحساب الشخصي (للردود والنشر)
+    # 3. عميل الحساب الشخصي (للنشر والرد التلقائي)
     app = Client(
         name=f"{DATA_DIR}/{SESSION_NAME}",
         api_id=config.API_ID,
         api_hash=config.API_HASH
     )
 
-    # 4. عميل البوت الرسمي (للوحة التحكم والأزرار)
-    # تأكد من إضافة BOT_TOKEN في ملف config.py أو Railway
+    # 4. عميل البوت الرسمي (لوحة التحكم بالأزرار الشفافة)
+    # تأكد من تعريف BOT_TOKEN في ملف config.py
     bot_app = Client(
         name="bot_admin",
         api_id=config.API_ID,
         api_hash=config.API_HASH,
-        bot_token=config.BOT_TOKEN 
+        bot_token=config.BOT_TOKEN
     )
 
     # 5. تسجيل الهاندلرز
-    # لوحة التحكم تشتغل على البوت الرسمي
+    # لوحة التحكم تعمل من خلال البوت الرسمي لتظهر الأزرار الشفافة
     admin_register(bot_app, db, cur, config.ADMIN_ID)
-    
-    # الرد التلقائي يشتغل على حسابك الشخصي
+    # الردود تعمل من خلال حسابك الشخصي
     chat_register(app, db, cur)
 
     # 6. تشغيل العملاء
     await app.start()
     await bot_app.start()
-    log.info("💎 الحساب والبوت الآن متصلان!")
+    log.info("💎 الحساب والبوت متصلان وجاهزان!")
 
-    # 7. تشغيل مهام النشر (تستخدم حسابك الشخصي)
+    # 7. تشغيل المهام الخلفية (تستخدم حسابك الشخصي)
     asyncio.create_task(publisher(app, cur))
     asyncio.create_task(retarget(app, cur))
 
