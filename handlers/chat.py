@@ -6,15 +6,39 @@ from core.learning import get_best_replies
 from ai.engine import generate_reply
 from config import REPLY_PROBABILITY
 
-# 🧠 ذاكرة مؤقتة
 MEMORY = {}
 
 def register(app, cur, db):
 
-    @app.on_message(filters.text)
+    # إنشاء الجداول إذا ما موجودة
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS clients (
+        user_id INTEGER PRIMARY KEY,
+        score INTEGER,
+        state TEXT
+    )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS learning_data (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_text TEXT,
+        bot_reply TEXT,
+        state TEXT,
+        style TEXT
+    )
+    """)
+    db.commit()
+
+    # ✅ رد فقط بالكروبات (مو الخاص)
+    @app.on_message(filters.text & filters.group)
     async def chat(_, m):
 
-        # تقليل الردود (Anti-Spam)
+        # ❌ تجاهل البوتات
+        if m.from_user is None or m.from_user.is_bot:
+            return
+
+        # 🎲 تقليل الردود
         if random.random() > REPLY_PROBABILITY:
             return
 
@@ -35,7 +59,6 @@ def register(app, cur, db):
         ).fetchone()
 
         total = score + (row[0] if row else 0)
-
         state = get_state(total)
 
         # حفظ العميل
@@ -48,7 +71,7 @@ def register(app, cur, db):
         style = choose_style(state)
         best_style = get_best_style(cur)
 
-        # ───── LEARNING DATA ─────
+        # ───── LEARNING ─────
         best_replies = get_best_replies(cur)
 
         # ───── AI REPLY ─────
@@ -61,7 +84,8 @@ def register(app, cur, db):
                 memory=history + best_replies
             )
         except Exception as e:
-            reply = "صارت مشكلة بسيطة، اكتبلي مرة ثانية 🙏"
+            print("AI Error:", e)
+            reply = "صار خلل بسيط، اكتبلي مرة ثانية 🙏"
 
         # ───── حفظ التعلم ─────
         cur.execute(
@@ -74,5 +98,5 @@ def register(app, cur, db):
 
         db.commit()
 
-        # ───── إرسال الرد ─────
+        # ───── الرد ─────
         await m.reply(reply)
