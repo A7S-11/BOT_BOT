@@ -7,47 +7,48 @@ import logging
 
 log = logging.getLogger(__name__)
 
-# إعداد Gemini
+# إعداد Gemini - تأكد إن المفتاح بـ Railway اسمه GEMINI_API_KEY
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel('gemini-pro')
 
 def register(app, db, cur):
-    # الفلتر هسة يشمل كل الرسائل النصية الخاصة ومن غير حسابك
     @app.on_message(filters.text & filters.private & ~filters.me)
     async def chat_handler(client, m):
         user_id = m.from_user.id
+        user_name = m.from_user.first_name or "الغالي"
         text = m.text
         
-        log.info(f"📩 وصلت رسالة من: {user_id}")
+        log.info(f"📩 رسالة جديدة من {user_name} ({user_id})")
 
         try:
-            # --- ميزة التفكير والانتظار الذكي ---
-            # أولاً: يبين إنه "جاري الكتابة" لفترة عشوائية حسب طول الرسالة
+            # 1. محاكاة القراءة (ثانيتين)
             await client.send_chat_action(m.chat.id, "typing")
-            wait_time = random.uniform(2, 5) # ينتظر بين 2 إلى 5 ثواني كأنه جاي يقرأ
-            await asyncio.sleep(wait_time)
+            await asyncio.sleep(2)
 
-            # --- توجيه الذكاء الاصطناعي (Prompt) ---
+            # 2. تعليمات الرد "الجامد"
             prompt = f"""
-            أنت 'علوش' مبرمج وبوت ديفيلوبر عراقي، ذكي وشخصيتك قوية.
-            رد بلهجة عراقية شعبية (مو رسمية)، خلي الرد يبين كأنك شخص حقيقي جاي يدردش.
-            ممنوع تستخدم كلمات مثل "أهلاً بك" أو "كيف يمكنني مساعدتك".
-            إذا سألك عن برمجة أو بوتات، جاوبه كخبير.
-            إذا سألك سؤال عادي، رد بذكاء ومزاح عراقي.
+            أنت 'علوش' مبرمج عراقي خبير وقوي. 
+            رد على هالكلام بلهجة عراقية بحتة (شعبية وممتعة).
+            خليك ذكي، لا ترحب هواي، ادخل بالموضوع كبل. 
+            إذا سأل عن بوتات أو برمجة، بين عضلاتك وخبرتك.
             
-            الكلام اللي وصلك: {text}
+            اسم المرسل: {user_name}
+            كلامه: {text}
+            
+            ردك العراقي:
             """
             
             response = model.generate_content(prompt)
             
             if response.text:
-                # يرجع يسوي typing قبل الإرسال الفعلي
+                # 3. محاكاة الكتابة قبل الإرسال
                 await client.send_chat_action(m.chat.id, "typing")
                 await asyncio.sleep(1)
                 await m.reply(response.text)
-                log.info(f"✅ تم الرد بذكاء على {user_id}")
+                log.info(f"✅ تم الرد على {user_name}")
             else:
-                await m.reply("ها عيوني، كول شمحتاج؟")
+                await m.reply("كول عيوني، اسمعك..")
                 
         except Exception as e:
-            log.error(f"❌ خطأ في الرد الذكي: {e}")
+            log.error(f"❌ خطأ بالرد: {e}")
+            await m.reply("ثواني عيني، النت يمي تعبان.")
